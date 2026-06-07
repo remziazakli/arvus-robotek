@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROBOTEK Başvuru Kategorilendirme Sistemi</title>
+    <!-- Modern Yazı Tipi -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Excel Dosyalarını Okumak İçin Gerekli Kütüphane (SheetJS) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        /* ─── PREMIUM TASARIM VE RENK PALETİ ─── */
+        :root {
+            --bg: #0d1117;
+            --card: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --muted: #8b949e;
+            --primary: #58a6ff;
+            --primary-hover: #1f6feb;
+            --success: #2ea043;
+            --warning: #d29922;
+            --danger: #f85149;
+            --font: 'Inter', sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: var(--font);
+            padding: 24px;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* ─── HEADER ─── */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        h1 { font-size: 22px; font-weight: 700; color: #fff; }
+        
+        .actions-btn-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        /* ─── CUSTOM BUTTONS ─── */
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #fff;
+        }
+        .btn-primary { background: var(--primary); border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-success { background: var(--success); border-color: var(--success); }
+        .btn-success:hover { filter: brightness(1.1); }
+        .btn-secondary { background: var(--card); }
+        .btn-secondary:hover { background: var(--border); }
+
+        /* ─── STATS CARDS ─── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            padding: 20px;
+            border-radius: 12px;
+            position: relative;
+        }
+        .stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; font-weight: 700; }
+        .stat-value { font-size: 28px; font-weight: 800; color: #fff; margin-top: 4px; }
+
+        /* ─── EXCEL DROP ZONE ─── */
+        .drop-zone {
+            background: var(--card);
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 24px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .drop-zone:hover, .drop-zone.drag-over {
+            border-color: var(--primary);
+        }
+        .drop-zone input { display: none; }
+        .drop-icon { font-size: 32px; margin-bottom: 8px; }
+        .drop-text { font-size: 14px; font-weight: 500; }
+
+        /* ─── TABS & FILTERS ─── */
+        .cat-tabs {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .tab {
+            padding: 8px 16px;
+            background: transparent;
+            border: none;
+            color: var(--muted);
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            border-radius: 6px;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: #fff; background: rgba(255,255,255,0.05); }
+        .tab.active { color: #fff; background: var(--border); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+
+        .filter-bar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .search-input {
+            flex: 1;
+            min-width: 200px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            padding: 10px 16px;
+            border-radius: 8px;
+            color: #fff;
+            font-family: var(--font);
+        }
+        .search-input:focus { outline: 1px solid var(--primary); }
+
+        /* ─── DATA TABLE ─── */
+        .table-wrapper {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 13px;
+        }
+        th, td { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+        th { background: rgba(255,255,255,0.02); font-weight: 600; color: #fff; }
+        tr:hover td { background: rgba(255,255,255,0.01); }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge-cat { background: rgba(88,166,255,0.15); color: var(--primary); }
+        .badge-success { background: rgba(46,160,67,0.15); color: #3fb950; }
+        .badge-danger { background: rgba(248,81,73,0.15); color: var(--danger); }
+
+        /* ─── MODAL ─── */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .modal {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            width: 700px;
+            max-width: 100%;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-body { padding: 20px; flex: 1; overflow-y: auto; }
+        .modal-footer { padding: 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px; }
+        textarea {
+            width: 100%;
+            height: 350px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            color: #fff;
+            font-family: monospace;
+            font-size: 12px;
+            resize: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div>
+            <h1>ROBOTEK Başvuru Kategorilendirme</h1>
+            <p style="color:var(--muted); font-size:12px; margin-top:4px;">GitHub Pages Statik Sürümü</p>
+        </div>
+        <div class="actions-btn-group">
+            <button class="btn btn-secondary" onclick="clearData()">🗑️ Verileri Sıfırla</button>
+            <button class="btn btn-primary" onclick="openReportModal()">📋 Rapor Çıktısı Al</button>
+        </div>
+    </header>
+
+    <!-- İstatistik Kartları -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Toplam Takım</div>
+            <div class="stat-value" id="statTotal">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Raporu Yüklenenler</div>
+            <div class="stat-value" id="statUploaded">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Raporu Olmayanlar</div>
+            <div class="stat-value" id="statMissing">0</div>
+        </div>
+    </div>
+
+    <!-- Excel Yükleme Alanı -->
+    <label class="drop-zone" id="dropZone" for="fileInput">
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" onchange="handleFile(this.files[0])">
+        <div class="drop-icon">📥</div>
+        <div class="drop-text">Excel dosyasını sürükleyin veya tıklayarak yükleyin</div>
+        <div class="drop-sub" style="color:var(--muted); font-size:11px; margin-top:4px;">Excel'den Ad Soyad, Kategori, Takım Adı ve Dosya/Rapor durumu çekilir.</div>
+    </label>
+
+    <!-- Filtreler ve Kategoriler -->
+    <div class="cat-tabs" id="catTabs"></div>
+    
+    <div class="filter-bar">
+        <input type="text" class="search-input" id="searchInput" placeholder="🔍 İsim veya takım adı ara..." oninput="renderTable()">
+    </div>
+
+    <!-- Tablo -->
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Ad Soyad</th>
+                    <th>Takım Adı</th>
+                    <th>Kategori</th>
+                    <th>Okul</th>
+                    <th>Rapor / Dosya Durumu</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <tr>
+                    <td colspan="6" style="text-align:center; padding:30px; color:var(--muted);">Henüz veri yüklenmedi. Excel dosyasını yukarıdan sürükleyip bırakabilirsiniz.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Rapor Modali -->
+<div class="modal-overlay" id="reportModal" onclick="closeReportModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 style="color:#fff;">📋 Detaylı Rapor Çıktısı</h3>
+            <button onclick="closeReportModal()" style="background:none; border:none; color:var(--muted); font-size:18px; cursor:pointer;">✕</button>
+        </div>
+        <div class="modal-body">
+            <textarea id="reportText" readonly></textarea>
+        </div>
+        <div class="modal-footer">
+            <span id="copyStatus" style="color:var(--success); font-size:12px; margin-right:auto;"></span>
+            <button class="btn btn-secondary" onclick="closeReportModal()">Kapat</button>
+            <button class="btn btn-success" onclick="copyReportText()">📋 Kopyala</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ─── KATEGORİLER ───
+    const CATEGORIES = [
+        'Çizgi İzleyen Robot', 'İnsansız Hava Araçları', 'Mini Sumo Robot',
+        'Labirent Çözen', 'Savaşan Robot', 'Robo Futbol', 'Tasarla ve Geliştir', 'Serbest'
+    ];
+
+    let apps = [];
+    let activeCat = '';
+
+    // Sayfa açıldığında LocalStorage'dan yükle
+    window.onload = function() {
+        try {
+            apps = JSON.parse(localStorage.getItem('gp_apps') || '[]');
+            renderTabs();
+            renderTable();
+            updateStats();
+        } catch(e) {}
+    };
+
+    // ─── EXCEL OKUMA VE NORMALLEŞTİRME ───
+    function handleFile(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = e.target.result;
+                const workbook = XLSX.read(data, { type: 'binary' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                if (rawRows.length < 2) {
+                    alert('Dosya boş veya geçersiz!');
+                    return;
+                }
+
+                // Sütun eşleştirme
+                const headers = rawRows[0].map(h => (h || '').toString().toLowerCase().trim());
+                const map = {
+                    name: headers.findIndex(h => h.includes('ad soyad') || h.includes('name') || h === 'ad' || h === 'soyad'),
+                    team: headers.findIndex(h => h.includes('takım') || h.includes('team')),
+                    category: headers.findIndex(h => h.includes('kategori') || h.includes('category') || h === 'cat'),
+                    school: headers.findIndex(h => h.includes('okul') || h.includes('üniversite') || h.includes('school')),
+                    files: headers.findIndex(h => h.includes('dosya') || h.includes('rapor') || h.includes('hasfiles') || h.includes('file'))
+                };
+
+                const importedApps = [];
+                for (let i = 1; i < rawRows.length; i++) {
+                    const r = rawRows[i];
+                    if (!r.some(cell => cell !== '')) continue; // Boş satırları atla
+
+                    let nameVal = map.name !== -1 ? r[map.name] : '';
+                    let teamVal = map.team !== -1 ? r[map.team] : '';
+                    let catVal = map.category !== -1 ? r[map.category] : 'Serbest';
+                    let schoolVal = map.school !== -1 ? r[map.school] : '—';
+                    let hasFilesVal = false;
+
+                    // Dosya/Rapor sütunu varsa ve içi boş değilse veya "var" / "yüklendi" yazıyorsa
+                    if (map.files !== -1 && r[map.files]) {
+                        const val = r[map.files].toString().toLowerCase();
+                        if (val === 'true' || val === '1' || val.includes('var') || val.includes('yük') || val.includes('yes') || val.includes('ok')) {
+                            hasFilesVal = true;
+                        }
+                    }
+
+                    // Kategori mapleme
+                    catVal = mapCategoryName(catVal);
+
+                    if (nameVal || teamVal) {
+                        importedApps.push({
+                            id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+                            name: nameVal || '—',
+                            team: teamVal || '',
+                            category: catVal,
+                            school: schoolVal || '—',
+                            hasFiles: hasFilesVal
+                        });
+                    }
+                }
+
+                if (importedApps.length > 0) {
+                    apps = importedApps;
+                    localStorage.setItem('gp_apps', JSON.stringify(apps));
+                    renderTabs();
+                    renderTable();
+                    updateStats();
+                    alert(`Başarıyla ${apps.length} kayıt içeri aktarıldı!`);
+                } else {
+                    alert('Aktarılacak geçerli veri bulunamadı.');
+                }
+            } catch (err) {
+                alert('Dosya okunamadı: ' + err.message);
+            }
+        };
+        reader.readAsBinaryString(file);
+    }
+
+    // Basit Kategori Eşleyici
+    function mapCategoryName(siteCat) {
+        if (!siteCat) return 'Serbest';
+        const clean = siteCat.toLowerCase().replace(/_/g, ' ').trim();
+        const mapping = {
+            'cizgi izleyen': 'Çizgi İzleyen Robot',
+            'çizgi izleyen': 'Çizgi İzleyen Robot',
+            'insansiz hava': 'İnsansız Hava Araçları',
+            'insansız hava': 'İnsansız Hava Araçları',
+            'savasan iha': 'İnsansız Hava Araçları',
+            'savaşan iha': 'İnsansız Hava Araçları',
+            'iha': 'İnsansız Hava Araçları',
+            'mini sumo': 'Mini Sumo Robot',
+            'labirent': 'Labirent Çözen',
+            'savasan robot': 'Savaşan Robot',
+            'savaşan robot': 'Savaşan Robot',
+            'robo futbol': 'Robo Futbol',
+            'tasarla': 'Tasarla ve Geliştir',
+            'serbest': 'Serbest'
+        };
+        for (const [key, val] of Object.entries(mapping)) {
+            if (clean.includes(key)) return val;
+        }
+        const found = CATEGORIES.find(c => c.toLowerCase() === clean);
+        return found || 'Serbest';
+    }
+
+    // ─── TAB VE FİLTRELEME ───
+    function renderTabs() {
+        const tabsEl = document.getElementById('catTabs');
+        const tabDefs = [{ label: '📋 Tümü', cat: '' }, ...CATEGORIES.map(c => ({ label: c, cat: c }))];
+        tabsEl.innerHTML = tabDefs.map(({ label, cat }) => {
+            const count = cat ? apps.filter(a => a.category === cat).length : apps.length;
+            const active = activeCat === cat ? 'active' : '';
+            return `<button class="tab ${active}" onclick="setTab('${cat}')">${label} (${count})</button>`;
+        }).join('');
+    }
+
+    function setTab(cat) {
+        activeCat = cat;
+        renderTabs();
+        renderTable();
+    }
+
+    // ─── TABLO OLUŞTURMA ───
+    function renderTable() {
+        const tbody = document.getElementById('tableBody');
+        const q = document.getElementById('searchInput').value.toLowerCase();
+        
+        const filtered = apps.filter(a => {
+            const matchQuery = a.name.toLowerCase().includes(q) || a.team.toLowerCase().includes(q) || a.school.toLowerCase().includes(q);
+            const matchCat = !activeCat || a.category === activeCat;
+            return matchQuery && matchCat;
+        });
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--muted);">Gösterilecek veri bulunamadı.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = filtered.map((a, i) => `
+            <tr>
+                <td style="color:var(--muted);">${i + 1}</td>
+                <td><b>${a.name}</b></td>
+                <td>${a.team || '—'}</td>
+                <td><span class="badge badge-cat">${a.category}</span></td>
+                <td>${a.school}</td>
+                <td>
+                    <button class="badge ${a.hasFiles ? 'badge-success' : 'badge-danger'}" style="border:none; cursor:pointer;" onclick="toggleFileStatus('${a.id}')">
+                        ${a.hasFiles ? '✅ Rapor Yüklendi' : '❌ Rapor Yok'}
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    // Bireysel dosya durumunu tersine çevir
+    function toggleFileStatus(id) {
+        apps = apps.map(a => a.id === id ? { ...a, hasFiles: !a.hasFiles } : a);
+        localStorage.setItem('gp_apps', JSON.stringify(apps));
+        renderTable();
+        updateStats();
+    }
+
+    function updateStats() {
+        document.getElementById('statTotal').textContent = apps.length;
+        document.getElementById('statUploaded').textContent = apps.filter(a => a.hasFiles).length;
+        document.getElementById('statMissing').textContent = apps.filter(a => !a.hasFiles).length;
+    }
+
+    function clearData() {
+        if (confirm('Tüm verileri temizlemek istediğinizden emin misiniz?')) {
+            apps = [];
+            localStorage.removeItem('gp_apps');
+            setTab('');
+            alert('Veriler temizlendi.');
+        }
+    }
+
+    // ─── DETAYLI RAPOR TEXT ÜRETME ───
+    function buildReportText() {
+        const now = new Date().toLocaleString('tr-TR');
+        const lines = [];
+        lines.push('═══════════════════════════════════════════════════');
+        lines.push('     BAŞVURU SİSTEMİ — DETAYLI TAKIM RAPOR RAPORU');
+        lines.push('  Tarih: ' + now);
+        lines.push('═══════════════════════════════════════════════════');
+        lines.push('');
+
+        for (let i = 0; i < CATEGORIES.length; i++) {
+            const cat = CATEGORIES[i];
+            const catApps = apps.filter(a => a.category === cat);
+
+            lines.push(`📂 ${cat.toUpperCase()}`);
+            lines.push(`   Toplam Takım: ${catApps.length}`);
+            lines.push('  ─────────────────────────────────────────────────');
+
+            if (catApps.length === 0) {
+                lines.push('     (Bu kategoride henüz başvuru yok)');
+            } else {
+                for (let j = 0; j < catApps.length; j++) {
+                    const a = catApps[j];
+                    const teamName = a.team ? `${a.team} (${a.name})` : a.name;
+                    const reportStatus = a.hasFiles ? 'RAPOR YÜKLENDİ' : 'RAPOR YÜKLENMEDİ';
+                    const reportIcon = a.hasFiles ? '✅' : '❌';
+                    lines.push(`     ${j + 1}. ${teamName} — ${reportIcon} ${reportStatus}`);
+                }
+            }
+            lines.push('');
+        }
+
+        lines.push('═══════════════════════════════════════════════════');
+        lines.push('ÖZET:');
+        const totalWithReport = apps.filter(a => a.hasFiles).length;
+        lines.push(`  Raporu Yüklenen Toplam Takım: ${totalWithReport}/${apps.length}`);
+        lines.push('═══════════════════════════════════════════════════');
+
+        return lines.join('\n');
+    }
+
+    function openReportModal() {
+        document.getElementById('reportText').value = buildReportText();
+        document.getElementById('reportModal').style.display = 'flex';
+        document.getElementById('copyStatus').textContent = '';
+    }
+
+    function closeReportModal() {
+        document.getElementById('reportModal').style.display = 'none';
+    }
+
+    function copyReportText() {
+        const textarea = document.getElementById('reportText');
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            document.getElementById('copyStatus').textContent = '✅ Panoya kopyalandı!';
+        } catch (err) {
+            alert('Kopyalanamadı, lütfen manuel kopyalayın.');
+        }
+    }
+
+    // Drag & Drop
+    const dz = document.getElementById('dropZone');
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+    dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+</script>
+
+</body>
+</html>
