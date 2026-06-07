@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Başvuru Sistemi — Giriş</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+    <!-- Firebase (canlı başvuru sayısı için) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box
+        }
+
+        :root {
+            --bg: #0d1117;
+            --card: #161b22;
+            --border: #21262d;
+            --accent: #4f8ef7;
+            --accent2: #7c6dfa;
+            --text: #e6edf3;
+            --muted: #8b949e;
+            --danger: #f85149;
+            --success: #3fb950;
+            --orange: #f0883e
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Inter', sans-serif;
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            padding: 24px 16px;
+            background-image: radial-gradient(ellipse at 20% 50%, rgba(79, 142, 247, .08) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(124, 109, 250, .08) 0%, transparent 60%)
+        }
+
+        .stats-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 28px 32px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 24px 64px rgba(0, 0, 0, .5);
+            display: none;
+        }
+        .stats-card.live { display: block; }
+        .stats-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .stats-head h2 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--muted);
+            letter-spacing: .3px;
+            text-transform: uppercase;
+        }
+        .stats-live {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: var(--success);
+            font-weight: 600;
+        }
+        .live-dot {
+            width: 8px; height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--success);
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .35; }
+        }
+        .stats-total {
+            text-align: center;
+            margin-bottom: 18px;
+        }
+        .stats-total .num {
+            font-size: 44px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            line-height: 1;
+        }
+        .stats-total .lbl {
+            font-size: 13px;
+            color: var(--muted);
+            margin-top: 4px;
+        }
+        .cat-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border-top: 1px solid var(--border);
+            padding-top: 16px;
+        }
+        .cat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            padding: 6px 0;
+        }
+        .cat-row .name {
+            color: var(--text);
+        }
+        .cat-row .count {
+            font-weight: 700;
+            color: var(--accent);
+            background: rgba(79,142,247,.12);
+            padding: 2px 10px;
+            border-radius: 12px;
+            min-width: 32px;
+            text-align: center;
+        }
+        .stats-empty {
+            text-align: center;
+            color: var(--muted);
+            font-size: 13px;
+            padding: 20px 0;
+        }
+
+        @media (max-width: 480px) {
+            .stats-card, .login-box {
+                padding: 24px 20px;
+            }
+            .stats-total .num {
+                font-size: 36px;
+            }
+        }
+
+        .login-box {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 48px 40px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 24px 64px rgba(0, 0, 0, .5)
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 36px;
+            justify-content: center
+        }
+
+        .logo-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 14px;
+            background: transparent;
+            display: grid;
+            place-items: center;
+        }
+        .logo-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 10px;
+        }
+
+        .logo-text h1 {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -.3px
+        }
+
+        .logo-text p {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 2px
+        }
+
+        .form-group {
+            margin-bottom: 18px
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--muted);
+            margin-bottom: 7px
+        }
+
+        input {
+            width: 100%;
+            padding: 11px 14px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+            transition: .2s
+        }
+
+        input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(79, 142, 247, .12)
+        }
+
+        .btn {
+            width: 100%;
+            padding: 13px;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: .2s;
+            letter-spacing: .2px
+        }
+
+        .btn:hover {
+            opacity: .9;
+            transform: translateY(-1px)
+        }
+
+        .btn:active {
+            transform: translateY(0)
+        }
+
+        .error {
+            background: rgba(248, 81, 73, .1);
+            border: 1px solid rgba(248, 81, 73, .3);
+            border-radius: 10px;
+            padding: 12px 14px;
+            font-size: 13px;
+            color: var(--danger);
+            margin-bottom: 16px;
+            display: none
+        }
+
+        .hint {
+            font-size: 12px;
+            color: var(--muted);
+            text-align: center;
+            margin-top: 20px
+        }
+
+        .hint b {
+            color: var(--accent)
+        }
+    </style>
+</head>
+
+<body>
+    <div class="stats-card" id="statsCard">
+        <div class="stats-head">
+            <h2>📊 Başvuru Durumu</h2>
+            <span class="stats-live"><span class="live-dot"></span>CANLI</span>
+        </div>
+        <div class="stats-total">
+            <div class="num" id="totalCount">0</div>
+            <div class="lbl">Toplam Başvuru</div>
+        </div>
+        <div class="cat-list" id="catList"></div>
+    </div>
+    <div class="login-box">
+        <div class="logo">
+            <div class="logo-icon"><img src="arvus-logo.png" alt="Arvus Logo" /></div>
+            <div class="logo-text">
+                <h1>Başvuru Sistemi</h1>
+                <p>ARVUS Takımı</p>
+            </div>
+        </div>
+        <div class="error" id="errBox">Hatalı kullanıcı adı veya şifre!</div>
+        <div class="form-group">
+            <label>Kullanıcı Adı</label>
+            <input type="text" id="username" placeholder="admin" autocomplete="username" />
+        </div>
+        <div class="form-group">
+            <label>Şifre</label>
+            <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+        <button class="btn" onclick="doLogin()">🔐 Giriş Yap</button>
+        <p class="hint">Varsayılan: <b>admin</b> / <b>admin123</b></p>
+    </div>
+    <script>
+        // Varsayılan admin hesabı — ileride ayarlardan değiştirilebilir
+        const ADMIN_USER = localStorage.getItem('bs_admin_user') || 'admin';
+        const ADMIN_PASS = localStorage.getItem('bs_admin_pass') || 'admin123';
+
+        document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+        // Zaten login ise direkt git
+        if (sessionStorage.getItem('bs_auth') === '1') window.location.href = 'admin.html';
+
+        function doLogin() {
+            const u = document.getElementById('username').value.trim();
+            const p = document.getElementById('password').value;
+            if (u === ADMIN_USER && p === ADMIN_PASS) {
+                sessionStorage.setItem('bs_auth', '1');
+                window.location.href = 'admin.html';
+            } else {
+                const e = document.getElementById('errBox');
+                e.style.display = 'block';
+                setTimeout(() => e.style.display = 'none', 3000);
+            }
+        }
+
+        // ─── CANLI BAŞVURU İSTATİSTİĞİ (Firebase) ───────────────
+        const FB_CONFIG = {
+            apiKey: "AIzaSyCkUWlEp3dpT7kV9cmg_ag8w2aUrw9NT7k",
+            authDomain: "arvus-robotek.firebaseapp.com",
+            databaseURL: "https://arvus-robotek-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "arvus-robotek",
+            storageBucket: "arvus-robotek.firebasestorage.app",
+            messagingSenderId: "490434147916",
+            appId: "1:490434147916:web:780bde475c30729181a6e9",
+            measurementId: "G-NW0FGDM3M6"
+        };
+        const FB_ROOM = 'arvus-2026';
+        const CAT_COLORS = {
+            'Çizgi İzleyen Robot': '#4f8ef7', 'İnsansız Hava Araçları': '#7c6dfa',
+            'Mini Sumo Robot': '#3fb950', 'Labirent Çözen': '#f0883e',
+            'Savaşan Robot': '#f85149', 'Robo Futbol': '#4dd0e1',
+            'Robo Futbol (Lise-Üniversite)': '#4dd0e1', 'Robo Futbol (İlkokul-Ortaokul)': '#00acc1',
+            'Tasarla ve Geliştir': '#b95ff7', 'Serbest': '#e1914d'
+        };
+        function renderPublicStats(apps) {
+            const card = document.getElementById('statsCard');
+            const list = document.getElementById('catList');
+            const total = document.getElementById('totalCount');
+            if (!Array.isArray(apps)) { card.classList.remove('live'); return; }
+            total.textContent = apps.length;
+            const cats = {};
+            apps.forEach(a => {
+                const c = a.category || 'Diğer';
+                cats[c] = (cats[c] || 0) + 1;
+            });
+            const entries = Object.entries(cats).sort((a, b) => b[1] - a[1]);
+            if (!entries.length) {
+                list.innerHTML = '<div class="stats-empty">Henüz başvuru yok</div>';
+            } else {
+                list.innerHTML = entries.map(([c, n]) => {
+                    const color = CAT_COLORS[c] || '#4f8ef7';
+                    return `<div class="cat-row"><span class="name" style="border-left:3px solid ${color};padding-left:10px">${c}</span><span class="count" style="color:${color};background:${color}22">${n}</span></div>`;
+                }).join('');
+            }
+            card.classList.add('live');
+        }
+        try {
+            if (window.firebase) {
+                if (!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+                const ref = firebase.database().ref('arvus_basvuru/' + FB_ROOM);
+                ref.on('value', snap => {
+                    const data = snap.val();
+                    renderPublicStats(data && data.apps ? data.apps : []);
+                }, () => {});
+            }
+        } catch (e) { console.warn('Canlı istatistik yüklenemedi:', e); }
+    </script>
+</body>
+
+</html>
