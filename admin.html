@@ -9,6 +9,9 @@
         rel="stylesheet" />
     <!-- SheetJS for Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Firebase (bulut eşitleme) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
     <link rel="stylesheet" href="styles.css" />
 </head>
 
@@ -273,6 +276,26 @@
 
         <!-- AYARLAR -->
         <section class="view" id="view-settings">
+            <div class="settings-card" style="border-color:rgba(79,142,247,.6)">
+                <h3>☁️ Bulut Eşitleme — Ortak Veri</h3>
+                <p style="color:var(--muted);font-size:13px;margin-bottom:12px;line-height:1.6">
+                    Firebase bilgisini yapıştır + bir takım kodu gir. <b>Aynı kodu kullanan tüm cihazlar (PC, tablet, arkadaşların) aynı başvuruları anlık görür.</b>
+                    İlk bağlanan cihazın verisi paylaşılır; sonra bağlananlar onu çeker.
+                </p>
+                <div class="form-group">
+                    <label>Firebase Config</label>
+                    <textarea id="cloudConfig" rows="6" placeholder="Firebase console'dan kopyaladığın { apiKey, databaseURL, ... } bloğunu yapıştır" style="width:100%;padding:11px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px;font-family:monospace;outline:none;resize:vertical"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Takım Kodu</label>
+                    <input type="text" id="cloudRoom" placeholder="örn. arvus-2026" />
+                </div>
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                    <button class="btn-save" onclick="cloudConnectFromUI()">☁️ Bağlan</button>
+                    <button class="btn-secondary" onclick="cloudDisconnect()">Bağlantıyı Kes</button>
+                    <span id="cloudStatus" style="font-size:13px;color:var(--muted)">● bağlı değil</span>
+                </div>
+            </div>
             <div class="settings-card">
                 <h3>⚙️ Admin Şifresi Değiştir</h3>
                 <div class="form-group"><label>Yeni Kullanıcı Adı</label><input type="text" id="newUser"
@@ -406,7 +429,7 @@
 
         // ─── DATA STORE ──────────────────────────────────────────
         function loadApps() { return JSON.parse(localStorage.getItem('bs_apps') || '[]'); }
-        function saveApps(arr) { localStorage.setItem('bs_apps', JSON.stringify(arr)); }
+        function saveApps(arr) { localStorage.setItem('bs_apps', JSON.stringify(arr)); cloudPush(); }
 
         let apps = loadApps();
         let editingId = null;
@@ -1057,6 +1080,7 @@
         }
         function saveParticipantReports(obj) {
             localStorage.setItem('bs_participant_reports', JSON.stringify(obj));
+            cloudPush();
         }
         function hasReport(id) {
             return !!loadParticipantReports()[id];
@@ -1135,6 +1159,97 @@
             });
         }
 
+        // ─── BULUT EŞİTLEME (Firebase) ───────────────────────────
+        // İstersen config'i buraya gömebilirsin; o zaman her cihaz otomatik bağlanır (paneli kullanmadan).
+        const BAKED_CONFIG = null;       // örn: { apiKey:"...", databaseURL:"...", projectId:"..." }
+        const BAKED_ROOM = 'arvus-2026'; // ortak takım kodu
+
+        const cloud = { config: null, room: null, ref: null, connected: false, applyingRemote: false };
+        function cloudState() { return { apps: apps || [], reports: loadParticipantReports() }; }
+        function cloudPush() {
+            if (cloud.connected && cloud.ref && !cloud.applyingRemote) {
+                cloud.ref.set(cloudState()).catch(() => {});
+            }
+        }
+        function rerenderActive() {
+            const active = document.querySelector('.view.active');
+            const id = active ? active.id : '';
+            if (id === 'view-applications') { renderCatTabs(); renderAppTable(); }
+            else { renderDashboard(); }
+        }
+        function onRemote(snap) {
+            const val = snap.val();
+            if (!val) return;
+            cloud.applyingRemote = true;
+            if (Array.isArray(val.apps)) { apps = val.apps; localStorage.setItem('bs_apps', JSON.stringify(apps)); }
+            if (val.reports && typeof val.reports === 'object') { localStorage.setItem('bs_participant_reports', JSON.stringify(val.reports)); }
+            rerenderActive();
+            cloud.applyingRemote = false;
+        }
+        function updateCloudStatus() {
+            const el = document.getElementById('cloudStatus');
+            if (el) {
+                el.textContent = cloud.connected ? ('● bağlı — oda: ' + cloud.room) : '● bağlı değil';
+                el.style.color = cloud.connected ? 'var(--success)' : 'var(--muted)';
+            }
+        }
+        function connectCloud(configText, room, silent) {
+            try {
+                if (!window.firebase) throw new Error('Firebase yüklenemedi (internet bağlantını kontrol et)');
+                let txt = (configText || '').trim();
+                const i = txt.indexOf('{'), j = txt.lastIndexOf('}');
+                if (i < 0 || j < 0) throw new Error('Geçerli bir config yapıştır');
+                const cfg = (new Function('return (' + txt.slice(i, j + 1) + ')'))();
+                if (!cfg.databaseURL) throw new Error('Config içinde databaseURL yok — Realtime Database oluşturdun mu?');
+                room = (room || 'arvus').replace(/[^a-zA-Z0-9_-]/g, '-');
+                if (!firebase.apps.length) firebase.initializeApp(cfg);
+                const ref = firebase.database().ref('arvus_basvuru/' + room);
+                cloud.config = cfg; cloud.room = room; cloud.ref = ref;
+                localStorage.setItem('bs_cloud', JSON.stringify({ config: cfg, room: room }));
+                ref.once('value').then(snap => {
+                    const val = snap.val();
+                    if (val && Array.isArray(val.apps) && val.apps.length) {
+                        cloud.applyingRemote = true;
+                        apps = val.apps; localStorage.setItem('bs_apps', JSON.stringify(apps));
+                        if (val.reports) localStorage.setItem('bs_participant_reports', JSON.stringify(val.reports));
+                        rerenderActive();
+                        cloud.applyingRemote = false;
+                    } else {
+                        ref.set(cloudState());
+                    }
+                    ref.on('value', onRemote);
+                    cloud.connected = true; updateCloudStatus();
+                    if (!silent) showToast('☁️ Buluta bağlandı — cihazlar artık eşit', 'success');
+                }).catch(e => { updateCloudStatus(); if (!silent) showToast('Bağlantı hatası: ' + e.message, 'error'); });
+            } catch (e) {
+                if (!silent) showToast('Hata: ' + e.message, 'error');
+            }
+        }
+        function cloudConnectFromUI() {
+            connectCloud(document.getElementById('cloudConfig').value, document.getElementById('cloudRoom').value, false);
+        }
+        function cloudDisconnect() {
+            try { if (cloud.ref) cloud.ref.off(); } catch (e) {}
+            cloud.connected = false; cloud.ref = null;
+            localStorage.removeItem('bs_cloud');
+            updateCloudStatus();
+            showToast('Bulut bağlantısı kesildi', 'info');
+        }
+        function cloudAutoConnect() {
+            try {
+                const saved = JSON.parse(localStorage.getItem('bs_cloud') || 'null');
+                if (saved && saved.config) {
+                    const cc = document.getElementById('cloudConfig'); if (cc) cc.value = JSON.stringify(saved.config, null, 2);
+                    const cr = document.getElementById('cloudRoom'); if (cr) cr.value = saved.room || '';
+                    connectCloud(JSON.stringify(saved.config), saved.room, true);
+                    return;
+                }
+                if (BAKED_CONFIG) {
+                    connectCloud(JSON.stringify(BAKED_CONFIG), BAKED_ROOM, true);
+                }
+            } catch (e) {}
+        }
+
         // ─── INIT ────────────────────────────────────────────────
         renderDashboard();
         loadDriveSettings();
@@ -1153,6 +1268,9 @@
             saveApps(apps);
             renderDashboard();
         }
+
+        // Kayıtlı/gömülü bulut ayarı varsa otomatik bağlan
+        cloudAutoConnect();
     </script>
 </body>
 
