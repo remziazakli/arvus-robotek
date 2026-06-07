@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Başvuru Sistemi — Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+    <!-- SheetJS for Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Firebase (bulut eşitleme) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-logo">
+            <div class="logo-icon" style="background:transparent; padding:0; overflow:hidden;">
+                <img src="arvus-logo.png" alt="ARVUS" style="width:100%; height:100%; object-fit:contain;" onerror="this.style.display='none';"/>
+            </div>
+            <div>
+                <div class="logo-title">BAŞVURU SİSTEMİ</div>
+                <div class="logo-sub">ARVUS Takımı</div>
+            </div>
+        </div>
+        <nav class="sidebar-nav">
+            <button class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')"><span
+                    class="nav-icon">🏠</span> Dashboard</button>
+            <button class="nav-item" data-view="applications" onclick="switchView('applications')"><span
+                    class="nav-icon">📋</span> Başvurular</button>
+            <button class="nav-item" data-view="import" onclick="switchView('import')"><span class="nav-icon">📥</span>
+                Excel Yükle</button>
+            <button class="nav-item" data-view="settings" onclick="switchView('settings')"><span
+                    class="nav-icon">⚙️</span> Ayarlar</button>
+        </nav>
+        <div class="sidebar-footer">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <img src="uni-logo.png" alt="SUBÜ Logo" style="max-width: 120px; max-height: 50px; opacity: 0.9; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));" onerror="this.style.display='none';" />
+            </div>
+            <div class="user-pill">
+                <div class="user-pill-avatar">A</div>
+                <div>
+                    <div class="user-pill-name">Admin</div>
+                    <div class="user-pill-role">Yönetici</div>
+                </div>
+            </div>
+            <button class="btn-logout" onclick="doLogout()">🚪 Çıkış</button>
+        </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main-content" id="mainContent">
+        <header class="topbar">
+            <div class="topbar-left">
+                <button class="hamburger" onclick="toggleSidebar()">☰</button>
+                <div class="page-title" id="pageTitle">Dashboard</div>
+            </div>
+            <div class="topbar-right">
+                <button class="btn-drive" id="btnDrive" onclick="syncToSheets()">📊 Sheets'e Aktar</button>
+                <button class="btn-export" onclick="exportExcel()">📊 Excel Dışa Aktar</button>
+                <button class="btn-add" onclick="openAddModal()">+ Yeni Başvuru</button>
+            </div>
+        </header>
+
+        <!-- DASHBOARD -->
+        <section class="view active" id="view-dashboard">
+            <div class="stats-grid">
+                <div class="stat-card card-blue">
+                    <div class="stat-top">
+                        <div class="stat-info">
+                            <div class="stat-label">Toplam Kayıtlar</div>
+                            <div class="stat-value" id="statTotal">0</div>
+                        </div>
+                        <div class="stat-icon">👥</div>
+                    </div>
+                    <div class="stat-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill blue" id="progTotal"></div>
+                        </div>
+                        <span id="progTotalPct">0%</span>
+                    </div>
+                    <div class="stat-target" id="statTotalTarget">Hedef: 1000</div>
+                </div>
+                <div class="stat-card card-purple">
+                    <div class="stat-top">
+                        <div class="stat-info">
+                            <div class="stat-label">Bekleyen Onaylar</div>
+                            <div class="stat-value" id="statPending">0</div>
+                        </div>
+                        <div class="stat-icon">⏳</div>
+                    </div>
+                    <div class="stat-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill purple" id="progPending"></div>
+                        </div>
+                        <span id="progPendingPct">0%</span>
+                    </div>
+                    <div class="stat-target" id="statPendingTarget">Tüm Kayıtlar: 0</div>
+                </div>
+                <div class="stat-card card-green">
+                    <div class="stat-top">
+                        <div class="stat-info">
+                            <div class="stat-label">Bugünün Kayıtları</div>
+                            <div class="stat-value" id="statToday">0</div>
+                        </div>
+                        <div class="stat-icon">📅</div>
+                    </div>
+                    <div class="stat-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill green" id="progToday"></div>
+                        </div>
+                        <span id="progTodayPct">0%</span>
+                    </div>
+                    <div class="stat-target">Günlük hedef: 25</div>
+                </div>
+            </div>
+
+            <!-- Son Kayıtlar -->
+            <div class="dash-card">
+                <div class="dash-card-header">
+                    <h3>Son Kayıtlar</h3>
+                    <div style="display:flex;gap:8px">
+                        <div class="search-box">
+                            <span>🔍</span>
+                            <input type="text" id="dashSearch" placeholder="Ad, kategori veya durum ara..."
+                                oninput="renderDashTable()" />
+                        </div>
+                        <button class="btn-filter-small" onclick="switchView('applications')">🔽 Filtrele</button>
+                        <button class="btn-export-small" onclick="exportExcel()">📊 Dışa Aktar (Excel)</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table class="data-table" id="dashTable">
+                        <thead>
+                            <tr>
+                                <th>Ad Soyad</th>
+                                <th>Kategori</th>
+                                <th>Tarih</th>
+                                <th>Durum</th>
+                                <th>İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dashTbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Kategori istatistikleri -->
+            <div class="dash-grid-2">
+                <div class="dash-card">
+                    <h3 class="dash-card-title2">Kategoriye Göre Başvurular</h3>
+                    <div id="catChart" class="bar-chart"></div>
+                </div>
+                <div class="dash-card">
+                    <h3 class="dash-card-title2">Duruma Göre Dağılım</h3>
+                    <div id="statusChart" class="bar-chart"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- BAŞVURULAR -->
+        <section class="view" id="view-applications">
+            <!-- KATEGORİ SEKMELERİ -->
+            <div class="cat-tabs-wrap">
+                <div class="cat-tabs" id="catTabs"></div>
+            </div>
+            <!-- FİLTRE -->
+            <div class="filter-bar">
+                <input type="text" id="appSearch" placeholder="🔍 Ad, e-posta, okul ara..." oninput="renderAppTable()"
+                    style="flex:1;min-width:180px" />
+                <select id="filterStatus" onchange="renderAppTable()">
+                    <option value="">Tüm Durumlar</option>
+                    <option>Bekliyor</option>
+                    <option>Onaylandı</option>
+                    <option>Reddedildi</option>
+                </select>
+                <button class="btn-export-small" onclick="exportCatExcel()">⬇️ Excel Olarak İndir</button>
+                <button class="btn-export-small" onclick="copyReport()" style="background:var(--card);color:var(--text);border:1px solid var(--border)">📋 Rapor Kopyala</button>
+                <button class="btn-drive" id="btnSyncCat" onclick="syncCatToSheets()"
+                    style="display:none; padding:7px 12px; font-size:12px">📊 Sheets'e Aktar</button>
+                <button class="btn-clear" onclick="clearAppFilters()">✕ Temizle</button>
+            </div>
+            <div class="table-wrap">
+                <table class="data-table" style="table-layout: fixed;">
+                    <colgroup>
+                        <col style="width: 2%;">  <!-- # -->
+                        <col style="width: 10%;"> <!-- Ad Soyad -->
+                        <col style="width: 12%;"> <!-- E-posta -->
+                        <col style="width: 11%;"> <!-- Kategori -->
+                        <col style="width: 12%;"> <!-- Okul -->
+                        <col style="width: 8%;">  <!-- Doğum -->
+                        <col style="width: 8%;">  <!-- Veli -->
+                        <col style="width: 10%;"> <!-- Takım -->
+                        <col style="width: 8%;">  <!-- Tarih -->
+                        <col style="width: 9%;">  <!-- Rapor -->
+                        <col style="width: 6%;">  <!-- Durum -->
+                        <col style="width: 4%;">  <!-- İşlemler -->
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Ad Soyad</th>
+                            <th>E-posta</th>
+                            <th>Kategori</th>
+                            <th>Okul</th>
+                            <th>Doğum Tarihi</th>
+                            <th>Veli İletişim</th>
+                            <th>Takım Adı</th>
+                            <th>Tarih</th>
+                            <th>📄 Rapor Durumu</th>
+                            <th>Durum</th>
+                            <th>İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody id="appTbody"></tbody>
+                </table>
+            </div>
+            <div class="table-footer" id="appFooter"></div>
+        </section>
+
+        <!-- EXCEL YÜKLE -->
+        <section class="view" id="view-import">
+            <div class="import-card">
+                <div class="import-icon">📥</div>
+                <h2>Excel Dosyası Yükle</h2>
+                <p>Siteden indirdiğiniz güncel Excel dosyasını yükleyin.<br />Sistem yalnızca <strong>yeni
+                        kayıtları</strong> ekler, mükerrer olanları atlar.</p>
+                <!-- KATEGORİ FİLTRESİ -->
+                <div class="import-cat-filter">
+                    <label>📂 Hangi kategoriden kayıt çekilsin?</label>
+                    <select id="importCatFilter">
+                        <option value="">Tüm Kategoriler (hepsini ekle)</option>
+                        <option>Çizgi İzleyen Robot</option>
+                        <option>İnsansız Hava Araçları</option>
+                        <option>Mini Sumo Robot</option>
+                        <option>Labirent Çözen</option>
+                        <option>Savaşan Robot</option>
+                        <option>Robo Futbol</option>
+                        <option>Tasarla ve Geliştir</option>
+                        <option>Serbest</option>
+                    </select>
+                </div>
+                <div class="import-mapping">
+                    <h4>📋 Beklenen Sütun Başlıkları:</h4>
+                    <div class="col-grid">
+                        <span>Kategori</span><span>Ad Soyad</span>
+                        <span>E-posta</span><span>Üniversite / Okul</span>
+                        <span>Doğum Tarihi</span><span>Veli İletişim</span>
+                        <span>Takım Adı</span><span>#, sıra no vb.</span>
+                    </div>
+                    <p style="font-size:12px;color:var(--muted);margin-top:8px">💡 Sütun adları büyük/küçük harf
+                        duyarsız eşleştirilir. Ekstra sütunlar görmezden gelinir.</p>
+                </div>
+                <label class="drop-zone" id="dropZone" for="fileInput">
+                    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" onchange="handleFile(this.files[0])"
+                        style="display:none" />
+                    <div class="drop-icon">📂</div>
+                    <div class="drop-text">Dosyayı buraya sürükleyin veya tıklayın</div>
+                    <div class="drop-sub">.xlsx, .xls veya .csv desteklenir</div>
+                </label>
+                <div class="import-result" id="importResult" style="display:none"></div>
+                <div id="importPreview" style="display:none">
+                    <h4 style="margin:16px 0 8px">Önizleme (ilk 5 yeni kayıt):</h4>
+                    <div class="table-wrap">
+                        <table class="data-table" id="previewTable"></table>
+                    </div>
+                    <button class="btn-import" id="importBtn" onclick="confirmImport()">✅ İçe Aktar</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- AYARLAR -->
+        <section class="view" id="view-settings">
+            <div class="settings-card" style="border-color:rgba(79,142,247,.6)">
+                <h3>☁️ Bulut Eşitleme — Ortak Veri</h3>
+                <p style="color:var(--muted);font-size:13px;margin-bottom:12px;line-height:1.6">
+                    Firebase bilgisini yapıştır + bir takım kodu gir. <b>Aynı kodu kullanan tüm cihazlar (PC, tablet, arkadaşların) aynı başvuruları anlık görür.</b>
+                    İlk bağlanan cihazın verisi paylaşılır; sonra bağlananlar onu çeker.
+                </p>
+                <div class="form-group">
+                    <label>Firebase Config</label>
+                    <textarea id="cloudConfig" rows="6" placeholder="Firebase console'dan kopyaladığın { apiKey, databaseURL, ... } bloğunu yapıştır" style="width:100%;padding:11px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px;font-family:monospace;outline:none;resize:vertical"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Takım Kodu</label>
+                    <input type="text" id="cloudRoom" placeholder="örn. arvus-2026" />
+                </div>
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                    <button class="btn-save" onclick="cloudConnectFromUI()">☁️ Bağlan</button>
+                    <button class="btn-secondary" onclick="cloudDisconnect()">Bağlantıyı Kes</button>
+                    <span id="cloudStatus" style="font-size:13px;color:var(--muted)">● bağlı değil</span>
+                </div>
+            </div>
+            <div class="settings-card">
+                <h3>⚙️ Admin Şifresi Değiştir</h3>
+                <div class="form-group"><label>Yeni Kullanıcı Adı</label><input type="text" id="newUser"
+                        placeholder="admin" /></div>
+                <div class="form-group"><label>Yeni Şifre</label><input type="password" id="newPass"
+                        placeholder="En az 6 karakter" /></div>
+                <button class="btn-save" onclick="saveSettings()">💾 Kaydet</button>
+            </div>
+            <div class="settings-card drive-card">
+                <h3>📊 Google Sheets Entegrasyonu</h3>
+                <p style="color:var(--muted);font-size:13px;margin-bottom:12px;line-height:1.6">
+                    Apps Script URL'nizi girin. Her “📊 Sheets'e Aktar” tıklamasında tüm kayıtlar tabloya yazılır.
+                </p>
+                <div class="form-group">
+                    <label>Apps Script URL</label>
+                    <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/.../exec" />
+                </div>
+                <button class="btn-save" onclick="saveDriveSettings()">💾 Kaydet</button>
+                <div id="driveStatus" class="drive-status" style="display:none"></div>
+            </div>
+            <div class="settings-card">
+                <h3>� Mükerrerleri Temizle</h3>
+                <p style="color:var(--muted);font-size:14px;margin-bottom:12px">Aynı e-posta adresine sahip tekrar eden
+                    kayıtları bulur ve en eski tarihli olanı tutarak diğerlerini siler.</p>
+                <div id="dupInfo" style="margin-bottom:12px;font-size:14px;color:var(--muted)"></div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                    <button class="btn-secondary" onclick="scanDuplicates()">🔍 Mükerrerleri Tara</button>
+                    <button class="btn-danger" id="btnRemoveDups" onclick="removeDuplicates()" style="display:none">🧹
+                        Mükerrerleri Sil</button>
+                </div>
+            </div>
+            <div class="settings-card" style="border-color:rgba(248,81,73,.4)">
+                <h3>🗑️ Tüm Başvuruları Sil</h3>
+                <p style="color:var(--muted);font-size:14px;margin-bottom:12px">Sadece başvuru kayıtları silinir. Admin
+                    şifresi ve ayarlar korunur.</p>
+                <button class="btn-danger" onclick="clearAllData()">🗑️ Tüm Başvuruları Sil</button>
+            </div>
+            <div class="settings-card" style="border-color:rgba(248,81,73,.7)">
+                <h3>⚠️ Tam Sistem Sıfırlama</h3>
+                <p style="color:var(--muted);font-size:14px;margin-bottom:12px">Tüm başvurular, admin şifreleri ve Drive
+                    ayarları dahil <b>her şey</b> silinir. Sistem fabrika ayarlarına döner.</p>
+                <button class="btn-danger" onclick="fullReset()">🔥 Her Şeyi Sıfırla</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- DETAY / DÜZENLE MODAL -->
+    <div class="modal-overlay" id="appModalOverlay" onclick="closeAppModal()">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2 id="appModalTitle">Başvuru Detayı</h2>
+                <button class="modal-close" onclick="closeAppModal()">✕</button>
+            </div>
+            <form id="appForm" onsubmit="saveApp(event)">
+                <div class="form-grid">
+                    <div class="form-group"><label>Ad Soyad <span class="req">*</span></label><input type="text"
+                            id="fName" required /></div>
+                    <div class="form-group"><label>E-posta <span class="req">*</span></label><input type="email"
+                            id="fEmail" required /></div>
+                    <div class="form-group">
+                        <label>Kategori <span class="req">*</span></label>
+                        <select id="fCat" required>
+                            <option value="">-- Seçiniz --</option>
+                            <option>Çizgi İzleyen Robot</option>
+                            <option>İnsansız Hava Araçları</option>
+                            <option>Mini Sumo Robot</option>
+                            <option>Labirent Çözen</option>
+                            <option>Savaşan Robot</option>
+                            <option>Robo Futbol</option>
+                            <option>Tasarla ve Geliştir</option>
+                            <option>Serbest</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Okul / Üniversite</label><input type="text" id="fSchool" /></div>
+                    <div class="form-group"><label>Doğum Tarihi</label><input type="text" id="fBirth"
+                            placeholder="GG.AA.YYYY" /></div>
+                    <div class="form-group"><label>Veli İletişim</label><input type="text" id="fParent"
+                            placeholder="0555 000 00 00" /></div>
+                    <div class="form-group"><label>Takım Adı</label><input type="text" id="fTeam" /></div>
+                    <div class="form-group">
+                        <label>Durum</label>
+                        <select id="fStatus">
+                            <option>Bekliyor</option>
+                            <option>Onaylandı</option>
+                            <option>Reddedildi</option>
+                        </select>
+                    </div>
+                    <div class="form-group full-width"><label>Notlar</label><textarea id="fNotes" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="closeAppModal()">İptal</button>
+                    <button type="submit" class="btn-primary">💾 Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- CONFIRM MODAL -->
+    <div class="modal-overlay" id="confirmOverlay">
+        <div class="modal" style="max-width:400px" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>Onay</h2>
+                <button class="modal-close" onclick="closeConfirm()">✕</button>
+            </div>
+            <div style="padding:22px 26px 10px;font-size:15px" id="confirmMsg"></div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeConfirm()">İptal</button>
+                <button class="btn-danger" onclick="doConfirm()">🗑️ Evet, Sil</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // ─── AUTH GUARD ─────────────────────────────────────────
+        if (sessionStorage.getItem('bs_auth') !== '1') window.location.href = 'index.html';
+
+        // ─── CATEGORIES ─────────────────────────────────────────
+        const CATEGORIES = [
+            'Çizgi İzleyen Robot', 'İnsansız Hava Araçları', 'Mini Sumo Robot',
+            'Labirent Çözen', 'Savaşan Robot', 'Robo Futbol (Lise-Üniversite)', 'Robo Futbol (İlkokul-Ortaokul)', 'Tasarla ve Geliştir', 'Serbest'
+        ];
+        const CAT_COLORS = {
+            'Çizgi İzleyen Robot': '#4f8ef7', 'İnsansız Hava Araçları': '#7c6dfa',
+            'Mini Sumo Robot': '#3fb950', 'Labirent Çözen': '#f0883e',
+            'Savaşan Robot': '#f85149', 'Robo Futbol (Lise-Üniversite)': '#4dd0e1', 'Robo Futbol (İlkokul-Ortaokul)': '#00acc1',
+            'Tasarla ve Geliştir': '#b95ff7', 'Serbest': '#e1914d'
+        };
+
+        // ─── DATA STORE ──────────────────────────────────────────
+        function loadApps() { return JSON.parse(localStorage.getItem('bs_apps') || '[]'); }
+        function saveApps(arr) { localStorage.setItem('bs_apps', JSON.stringify(arr)); cloudPush(); }
+
+        let apps = loadApps();
+        let editingId = null;
+        let confirmCb = null;
+        let pendingImportRows = [];
+
+        // ─── VIEW SWITCH ─────────────────────────────────────────
+        const VIEW_TITLES = { dashboard: 'Dashboard', applications: 'Başvurular', import: 'Excel Yükle', settings: 'Ayarlar' };
+        let activeCat = ''; // boş = Tümü
+        function switchView(name) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById('view-' + name).classList.add('active');
+            document.querySelector(`[data-view="${name}"]`).classList.add('active');
+            document.getElementById('pageTitle').textContent = VIEW_TITLES[name];
+            if (name === 'dashboard') renderDashboard();
+            if (name === 'applications') { renderCatTabs(); renderAppTable(); }
+        }
+        function toggleSidebar() {
+            const s = document.getElementById('sidebar'), m = document.getElementById('mainContent');
+            s.classList.toggle('collapsed'); m.classList.toggle('expanded');
+        }
+        // Kategori sekmeleri
+        function renderCatTabs() {
+            const tabs = document.getElementById('catTabs');
+            const allCount = apps.length;
+            const tabDefs = [{ label: '📋 Tümü', cat: '' }, ...CATEGORIES.map(c => ({ label: c, cat: c }))];
+            tabs.innerHTML = tabDefs.map(({ label, cat }) => {
+                const count = cat ? apps.filter(a => a.category === cat).length : allCount;
+                const color = cat ? CAT_COLORS[cat] : '#8b949e';
+                const active = activeCat === cat ? 'active' : '';
+                return `<button class="cat-tab ${active}" style="--tc:${color}" onclick="setCatTab('${cat}')">${label}<span class="tab-count">${count}</span></button>`;
+            }).join('');
+        }
+        function setCatTab(cat) {
+            activeCat = cat;
+            renderCatTabs();
+            renderAppTable();
+            const btn = document.getElementById('btnSyncCat');
+            if (btn) {
+                if (cat && localStorage.getItem('bs_script_url')) {
+                    btn.style.display = 'inline-flex';
+                } else {
+                    btn.style.display = 'none';
+                }
+            }
+        }
+        // Sadece aktif kategori için Excel aktar
+        function exportCatExcel() {
+            const list = activeCat ? apps.filter(a => a.category === activeCat) : apps;
+            if (!list.length) { showToast('Bu kategoride kayıt yok!', 'error'); return; }
+            const wb = XLSX.utils.book_new();
+            const cols = ['#', 'Ad Soyad', 'E-posta', 'Kategori', 'Okul', 'Doğum Tarihi', 'Veli İletişim', 'Takım Adı', 'Kayıt Tarihi', 'Durum'];
+            const rows = [cols, ...list.map((a, i) => [i + 1, a.name, a.email, a.category, a.school, a.birth, a.parent, a.team, fmtDate(a.createdAt), a.status || 'Bekliyor'])];
+            const ws = XLSX.utils.aoa_to_sheet(rows);
+            ws['!cols'] = [{ wch: 5 }, { wch: 25 }, { wch: 30 }, { wch: 25 }, { wch: 35 }, { wch: 15 }, { wch: 18 }, { wch: 20 }, { wch: 18 }, { wch: 12 }];
+            const sheetName = (activeCat || 'Tüm Kayıtlar').substring(0, 31);
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            const date = new Date().toLocaleDateString('tr-TR').replace(/\./g, '-');
+            XLSX.writeFile(wb, `basvurular_${sheetName}_${date}.xlsx`);
+            showToast('Excel indirildi ✅', 'success');
+        }
+
+        // ─── DASHBOARD ───────────────────────────────────────────
+        function renderDashboard() {
+            const total = apps.length;
+            const pending = apps.filter(a => a.status === 'Bekliyor').length;
+            const today = apps.filter(a => a.createdAt?.startsWith(todayStr())).length;
+            const GOAL = 1000, DAILY = 25;
+
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statPending').textContent = pending;
+            document.getElementById('statToday').textContent = today;
+
+            setProg('progTotal', 'progTotalPct', total, GOAL);
+            setProg('progPending', 'progPendingPct', pending, total || 1);
+            setProg('progToday', 'progTodayPct', today, DAILY);
+
+            document.getElementById('statTotalTarget').textContent = `Hedef: ${GOAL}`;
+            document.getElementById('statPendingTarget').textContent = `Tüm Kayıtlar: ${total}`;
+
+            // dash table — son 20
+            renderDashTable();
+
+            // Charts
+            const catData = {};
+            CATEGORIES.forEach(c => catData[c] = 0);
+            apps.forEach(a => { if (catData[a.category] !== undefined) catData[a.category]++; else catData[a.category] = (catData[a.category] || 0) + 1; });
+            renderBarChart('catChart', catData, CAT_COLORS);
+
+            const stData = { 'Bekliyor': 0, 'Onaylandı': 0, 'Reddedildi': 0 };
+            apps.forEach(a => { stData[a.status || 'Bekliyor'] = (stData[a.status || 'Bekliyor'] || 0) + 1; });
+            renderBarChart('statusChart', stData, { 'Bekliyor': '#f0883e', 'Onaylandı': '#3fb950', 'Reddedildi': '#f85149' });
+        }
+        function setProg(fillId, pctId, val, max) {
+            const pct = max > 0 ? Math.min(100, Math.round((val / max) * 100)) : 0;
+            document.getElementById(fillId).style.width = pct + '%';
+            document.getElementById(pctId).textContent = pct + '%';
+        }
+        function renderBarChart(id, data, colors) {
+            const el = document.getElementById(id);
+            const entries = Object.entries(data).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+            if (!entries.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px">Veri yok</div>'; return; }
+            const max = Math.max(...entries.map(e => e[1]));
+            el.innerHTML = entries.map(([l, c]) => `
+    <div class="bar-row">
+      <div class="bar-label" title="${l}">${l}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(c / max) * 100}%;background:${colors[l] || '#4f8ef7'}"></div></div>
+      <div class="bar-count">${c}</div>
+    </div>`).join('');
+        }
+        function renderDashTable() {
+            const q = (document.getElementById('dashSearch')?.value || '').toLowerCase();
+            const list = apps.filter(a => !q || JSON.stringify(a).toLowerCase().includes(q)).slice(0, 50);
+            const tbody = document.getElementById('dashTbody');
+            if (!list.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted)">Kayıt bulunamadı</td></tr>'; return; }
+            tbody.innerHTML = list.map(a => `
+    <tr onclick="openEditModal('${a.id}')" style="cursor:pointer">
+      <td><b>${a.name || '—'}</b></td>
+      <td><span class="cat-badge" style="background:${CAT_COLORS[a.category] || '#4f8ef7'}22;color:${CAT_COLORS[a.category] || '#4f8ef7'}">${a.category || '—'}</span></td>
+      <td style="color:var(--muted);font-size:13px">${fmtDate(a.createdAt)}</td>
+      <td><span class="status-badge badge-${stCls(a.status)}">${a.status || 'Bekliyor'}</span></td>
+      <td onclick="event.stopPropagation()" style="display:flex;gap:6px">
+        <button class="btn-icon2" onclick="openEditModal('${a.id}')">👁️</button>
+        <button class="btn-icon2 del" onclick="confirmDelete('${a.id}','${escQ(a.name)}')">🗑️</button>
+      </td>
+    </tr>`).join('');
+        }
+
+        // ─── APPLICATIONS TABLE ──────────────────────────────────
+        function renderAppTable() {
+            const q = (document.getElementById('appSearch')?.value || '').toLowerCase();
+            const st = document.getElementById('filterStatus')?.value || '';
+            const list = apps.filter(a => {
+                const m = !q || (a.name || '').toLowerCase().includes(q) || (a.email || '').toLowerCase().includes(q) || (a.school || '').toLowerCase().includes(q) || (a.team || '').toLowerCase().includes(q);
+                const mc = !activeCat || a.category === activeCat;
+                const ms = !st || a.status === st;
+                return m && mc && ms;
+            });
+            const tbody = document.getElementById('appTbody');
+            if (!list.length) { tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:24px;color:var(--muted)">Bu kategoride kayıt bulunamadı</td></tr>'; return; }
+            tbody.innerHTML = list.map((a, i) => `
+    <tr>
+      <td style="color:var(--muted)">${i + 1}</td>
+      <td><b>${a.name || '—'}</b></td>
+      <td class="truncate" style="color:var(--muted)" title="${a.email || '—'}">${a.email || '—'}</td>
+      <td><span class="cat-badge" style="background:${CAT_COLORS[a.category] || '#4f8ef7'}22;color:${CAT_COLORS[a.category] || '#4f8ef7'}">${a.category || '—'}</span></td>
+      <td class="truncate" title="${a.school || '—'}">${a.school || '—'}</td>
+      <td>${a.birth || '—'}</td>
+      <td>${a.parent || '—'}</td>
+      <td class="truncate" title="${a.team || '—'}">${a.team || '—'}</td>
+      <td style="color:var(--muted)">${fmtDate(a.createdAt)}</td>
+      <td>
+        <button class="team-report-btn" onclick="toggleReport('${a.id}')" style="padding:4px 8px; border:none; border-radius:5px; cursor:pointer; font-size:10px; font-weight:600; background:${hasReport(a.id) ? 'rgba(63,185,80,.15)' : 'rgba(240,136,62,.15)'}; color:${hasReport(a.id) ? '#3fb950' : '#f0883e'}">
+          ${hasReport(a.id) ? '✅ Yüklendi' : '⏳ Yüklenmedi'}
+        </button>
+      </td>
+      <td>
+        <select class="status-select badge-${stCls(a.status)}" onchange="changeStatus('${a.id}',this.value)">
+          <option ${a.status === 'Bekliyor' ? 'selected' : ''}>Bekliyor</option>
+          <option ${a.status === 'Onaylandı' ? 'selected' : ''}>Onaylandı</option>
+          <option ${a.status === 'Reddedildi' ? 'selected' : ''}>Reddedildi</option>
+        </select>
+      </td>
+      <td style="display:flex;gap:6px">
+        <button class="btn-icon2" onclick="openEditModal('${a.id}')">✏️</button>
+        <button class="btn-icon2 del" onclick="confirmDelete('${a.id}','${escQ(a.name)}')">🗑️</button>
+      </td>
+    </tr>`).join('');
+            const catLabel = activeCat || 'Tüm Kategoriler';
+            document.getElementById('appFooter').textContent = `${list.length} kayıt — ${catLabel} (toplam: ${apps.length})`;
+        }
+        function clearAppFilters() {
+            document.getElementById('appSearch').value = '';
+            document.getElementById('filterStatus').value = '';
+            activeCat = '';
+            renderCatTabs();
+            renderAppTable();
+        }
+        function changeStatus(id, status) {
+            apps = apps.map(a => a.id === id ? { ...a, status } : a);
+            saveApps(apps);
+            showToast(`Durum güncellendi: ${status}`, 'success');
+            renderDashboard();
+            renderCatTabs();
+        }
+
+        // ─── ADD/EDIT MODAL ──────────────────────────────────────
+        function openAddModal() {
+            editingId = null;
+            document.getElementById('appModalTitle').textContent = 'Yeni Başvuru';
+            document.getElementById('appForm').reset();
+            document.getElementById('fStatus').value = 'Bekliyor';
+            document.getElementById('appModalOverlay').classList.add('open');
+        }
+        function openEditModal(id) {
+            const a = apps.find(x => x.id === id); if (!a) return;
+            editingId = id;
+            document.getElementById('appModalTitle').textContent = 'Başvuru Düzenle';
+            document.getElementById('fName').value = a.name || '';
+            document.getElementById('fEmail').value = a.email || '';
+            document.getElementById('fCat').value = a.category || '';
+            document.getElementById('fSchool').value = a.school || '';
+            document.getElementById('fBirth').value = a.birth || '';
+            document.getElementById('fParent').value = a.parent || '';
+            document.getElementById('fTeam').value = a.team || '';
+            document.getElementById('fStatus').value = a.status || 'Bekliyor';
+            document.getElementById('fNotes').value = a.notes || '';
+            document.getElementById('appModalOverlay').classList.add('open');
+        }
+        function closeAppModal() { document.getElementById('appModalOverlay').classList.remove('open'); editingId = null; }
+        function saveApp(e) {
+            e.preventDefault();
+            const data = {
+                name: document.getElementById('fName').value.trim(),
+                email: document.getElementById('fEmail').value.trim(),
+                category: document.getElementById('fCat').value,
+                school: document.getElementById('fSchool').value.trim(),
+                birth: document.getElementById('fBirth').value.trim(),
+                parent: document.getElementById('fParent').value.trim(),
+                team: document.getElementById('fTeam').value.trim(),
+                status: document.getElementById('fStatus').value,
+                notes: document.getElementById('fNotes').value.trim(),
+            };
+            if (editingId) {
+                apps = apps.map(a => a.id === editingId ? { ...a, ...data } : a);
+                showToast('Başvuru güncellendi ✅', 'success');
+            } else {
+                apps.unshift({ ...data, id: uid(), createdAt: isoNow() });
+                showToast('Başvuru eklendi 🎉', 'success');
+            }
+            saveApps(apps);
+            closeAppModal();
+            renderDashboard();
+            renderAppTable();
+        }
+
+        // ─── DELETE ──────────────────────────────────────────────
+        function confirmDelete(id, name) {
+            document.getElementById('confirmMsg').innerHTML = `<b>${name}</b> silinecek. Bu işlem geri alınamaz!`;
+            confirmCb = () => { apps = apps.filter(a => a.id !== id); saveApps(apps); showToast('Silindi', 'info'); renderDashboard(); renderAppTable(); };
+            document.getElementById('confirmOverlay').classList.add('open');
+        }
+        function closeConfirm() { document.getElementById('confirmOverlay').classList.remove('open'); confirmCb = null; }
+        function doConfirm() { if (confirmCb) confirmCb(); closeConfirm(); }
+
+        // ─── EXCEL EXPORT ──────────────────────────────────────────
+        const COL_WIDTHS = [{ wch: 5 }, { wch: 25 }, { wch: 32 }, { wch: 26 }, { wch: 36 }, { wch: 15 }, { wch: 18 }, { wch: 22 }, { wch: 18 }, { wch: 12 }];
+        const HEADERS = ['#', 'Ad Soyad', 'E-posta', 'Kategori', 'Okul / Üniversite', 'Doğum Tarihi', 'Veli İletişim', 'Takım Adı', 'Kayıt Tarihi', 'Durum'];
+
+        function appToRow(a, i) {
+            return [
+                i + 1,
+                a.name || '',
+                a.email || '',
+                a.category || '',
+                a.school || '',
+                a.birth || '',
+                a.parent || '',
+                a.team || '',
+                fmtDate(a.createdAt),
+                a.status || 'Bekliyor'
+            ];
+        }
+        function makeSheet(list) {
+            const rows = [HEADERS, ...list.map((a, i) => appToRow(a, i))];
+            const ws = XLSX.utils.aoa_to_sheet(rows);
+            ws['!cols'] = COL_WIDTHS;
+            return ws;
+        }
+        // Sheet adı için yasak karakterleri temizle ve 31 kar sınırına uyu
+        function safeSheetName(name) {
+            return name.replace(/[\\/\*\[\]\?:]/g, '').substring(0, 31);
+        }
+
+        // Güvenilir indirme — file:// protokolünde de çalışır
+        function downloadXLSX(wb, filename) {
+            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1500);
+        }
+
+        function exportExcel() {
+            if (!apps.length) { showToast('Dışa aktarılacak kayıt yok!', 'error'); return; }
+            const wb = XLSX.utils.book_new();
+
+            XLSX.utils.book_append_sheet(wb, makeSheet(apps), 'Tum Kayitlar');
+
+            const realCats = [...new Set(apps.map(a => a.category).filter(Boolean))].sort();
+            realCats.forEach(cat => {
+                const catApps = apps.filter(a => a.category === cat);
+                XLSX.utils.book_append_sheet(wb, makeSheet(catApps), safeSheetName(cat));
+            });
+
+            const date = new Date().toLocaleDateString('tr-TR').replace(/\./g, '-');
+            downloadXLSX(wb, `basvurular_${date}.xlsx`);
+            showToast(`Excel indirildi ✅ (${XLSX.utils.book_get_sheet_names(wb).length} sheet)`, 'success');
+        }
+
+        function exportCatExcel() {
+            const list = activeCat ? apps.filter(a => a.category === activeCat) : apps;
+            if (!list.length) { showToast('Bu kategoride kayıt yok!', 'error'); return; }
+            const wb = XLSX.utils.book_new();
+            const sheetName = safeSheetName(activeCat || 'Tum Kayitlar');
+            XLSX.utils.book_append_sheet(wb, makeSheet(list), sheetName);
+            const date = new Date().toLocaleDateString('tr-TR').replace(/\./g, '-');
+            downloadXLSX(wb, `basvurular_${sheetName}_${date}.xlsx`);
+            showToast('Excel indirildi ✅', 'success');
+        }
+
+
+        // ─── EXCEL IMPORT ───────────────────────────────────────
+        // Sütun başlık eşleştirme (büyük/küçük harf duyarsız)
+        const COL_MAP = {
+            // Kategori
+            'kategori': 'category', 'category': 'category', 'cat': 'category',
+            // Ad Soyad
+            'ad soyad': 'name', 'name': 'name', 'adsoyad': 'name', 'ad': 'name', 'full name': 'name', 'fullname': 'name',
+            // E-posta
+            'e-posta': 'email', 'eposta': 'email', 'email': 'email', 'mail': 'email', 'e posta': 'email',
+            // Okul — TÜM varyantlar
+            'okul': 'school', 'üniversite': 'school', 'okul/üniversite': 'school', 'üniversite/okul': 'school',
+            'üniversite / okul': 'school', 'okul / üniversite': 'school',
+            'university': 'school', 'school': 'school', 'university/school': 'school',
+            'okul adı': 'school', 'üniversite adı': 'school', 'kurum': 'school',
+            // Doğum tarihi
+            'doğum tarihi': 'birth', 'dogum tarihi': 'birth', 'birth': 'birth', 'doğum': 'birth',
+            'doğum tarihi ': 'birth', 'birth date': 'birth', 'birthdate': 'birth',
+            // Veli
+            'veli iletişim': 'parent', 'veli': 'parent', 'parent': 'parent', 'veli iletisim': 'parent',
+            'veli bilgi': 'parent', 'guardian': 'parent', 'veli tel': 'parent', 'veli telefon': 'parent',
+            // Takım
+            'takım adı': 'team', 'takim adi': 'team', 'team': 'team', 'takım': 'team',
+            'team name': 'team', 'teamname': 'team',
+        };
+        function normalizeHeader(h) { return (h || '').toString().toLowerCase().trim().replace(/\s+/g, ' '); }
+
+        function handleFile(file) {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = e => {
+                try {
+                    const wb = XLSX.read(e.target.result, { type: 'binary' });
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+                    if (raw.length < 2) { showToast('Dosya boş veya hatalı!', 'error'); return; }
+
+                    // Header mapping
+                    const headers = raw[0].map(normalizeHeader);
+                    const fieldIdx = {};
+                    headers.forEach((h, i) => { const f = COL_MAP[h]; if (f) fieldIdx[f] = i; });
+
+                    // Hangi alanların bulunduğunu logla (debug)
+                    console.log('Excel başlıkları:', raw[0]);
+                    console.log('Alan eşleştirmesi:', fieldIdx);
+
+                    // Satırları dönüştür
+                    const rows = raw.slice(1).filter(r => r.some(c => c !== '')).map(r => ({
+                        category: (r[fieldIdx.category] || '').toString().trim() || 'Serbest',
+                        name: (r[fieldIdx.name] || '').toString().trim(),
+                        email: (r[fieldIdx.email] || '').toString().trim().toLowerCase(),
+                        school: fieldIdx.school !== undefined ? (r[fieldIdx.school] || '').toString().trim() : '',
+                        birth: (r[fieldIdx.birth] || '').toString().trim(),
+                        parent: (r[fieldIdx.parent] || '').toString().trim(),
+                        team: (r[fieldIdx.team] || '').toString().trim(),
+                    })).filter(r => r.name || r.email);
+
+                    if (!rows.length) { showToast('İçe aktarılacak geçerli satır bulunamadı!', 'error'); return; }
+
+                    // Kategori filtresi uygulanmış mı?
+                    const importCatFilter = document.getElementById('importCatFilter').value;
+                    const filteredRows = importCatFilter
+                        ? rows.filter(r => r.category === importCatFilter)
+                        : rows;
+
+                    pendingImportRows = filteredRows;
+
+                    // Önizleme hesapla
+                    const existingKeys = new Set(apps.map(a => `${a.email}__${a.category}`.toLowerCase()));
+                    const newRows = filteredRows.filter(r => !existingKeys.has(`${r.email}__${r.category}`.toLowerCase()));
+                    const dupRows = filteredRows.filter(r => existingKeys.has(`${r.email}__${r.category}`.toLowerCase()));
+                    // Mevcut kayıtlar içinde okul boş olanlar — güncellenecek
+                    const toUpdateCount = dupRows.filter(r => {
+                        const existing = apps.find(a => `${a.email}__${a.category}`.toLowerCase() === `${r.email}__${r.category}`.toLowerCase());
+                        return existing && (!existing.school && r.school);
+                    }).length;
+
+                    const res = document.getElementById('importResult');
+                    res.style.display = 'block';
+                    res.className = 'import-result ' + (newRows.length > 0 || toUpdateCount > 0 ? 'res-ok' : 'res-warn');
+                    const filterInfo = importCatFilter ? ` (» ${importCatFilter})` : ' (Tüm kategoriler)';
+                    res.innerHTML = `📊 <b>${rows.length}</b> toplam satır &nbsp;|&nbsp; 🔍 <b>${filteredRows.length}</b> süzüldükte${filterInfo} &nbsp;|&nbsp; 🆕 <b>${newRows.length}</b> yeni &nbsp;|&nbsp; 🔄 <b>${toUpdateCount}</b> eksik okul/bilgi güncellenecek`;
+
+                    // Okul alanı gelmediyse uyar
+                    if (fieldIdx.school === undefined) {
+                        res.innerHTML += `<br>⚠️ <b>Dikkat:</b> Excel'de okul sütunu eşleştirilemedi. Başlık: "${raw[0].join(' | ')}"`;
+                    }
+
+                    // Önizleme (ilk 5 — yeni + güncellenecekler karışık)
+                    const prev = document.getElementById('importPreview');
+                    const pt = document.getElementById('previewTable');
+                    const previewRows = [...newRows, ...dupRows.filter(r => {
+                        const ex = apps.find(a => `${a.email}__${a.category}`.toLowerCase() === `${r.email}__${r.category}`.toLowerCase());
+                        return ex && (!ex.school && r.school);
+                    })].slice(0, 5);
+                    pt.innerHTML = `<thead><tr><th>Ad Soyad</th><th>E-posta</th><th>Kategori</th><th>Okul</th><th>Takım</th></tr></thead>
+        <tbody>${previewRows.map(r => `<tr><td>${r.name}</td><td>${r.email}</td><td>${r.category}</td><td>${r.school || '—'}</td><td>${r.team || '—'}</td></tr>`).join('')}</tbody>`;
+                    prev.style.display = (newRows.length > 0 || toUpdateCount > 0) ? 'block' : 'none';
+                    document.getElementById('importBtn').dataset.count = newRows.length;
+                } catch (err) { showToast('Dosya okunamadı: ' + err.message, 'error'); }
+            };
+            reader.readAsBinaryString(file);
+        }
+
+        function confirmImport() {
+            // Mevcut kayıtların key map'i (email__category → id)
+            const keyToId = {};
+            apps.forEach(a => { keyToId[`${a.email}__${a.category}`.toLowerCase()] = a.id; });
+
+            const newRows = [];
+            let updatedCount = 0;
+
+            pendingImportRows.forEach(r => {
+                const key = `${r.email}__${r.category}`.toLowerCase();
+                if (keyToId[key]) {
+                    // Mevcut kayıt var — boş alanları güncelle
+                    apps = apps.map(a => {
+                        if (a.id !== keyToId[key]) return a;
+                        let changed = false;
+                        const update = { ...a };
+                        if (!a.school && r.school) { update.school = r.school; changed = true; }
+                        if (!a.parent && r.parent) { update.parent = r.parent; changed = true; }
+                        if (!a.team && r.team) { update.team = r.team; changed = true; }
+                        if (!a.birth && r.birth) { update.birth = r.birth; changed = true; }
+                        if (changed) updatedCount++;
+                        return update;
+                    });
+                } else {
+                    newRows.push(r);
+                }
+            });
+
+            const newApps = newRows.map(r => ({ ...r, id: uid(), status: 'Bekliyor', createdAt: isoNow() }));
+            apps = [...newApps, ...apps];
+            saveApps(apps);
+
+            let msg = '';
+            if (newApps.length) msg += `✅ ${newApps.length} yeni kayıt eklendi`;
+            if (updatedCount) msg += (msg ? ', ' : '') + `🔄 ${updatedCount} kayıttaki eksik okul/veli/takım bilgisi güncellendi`;
+            if (!newApps.length && !updatedCount) msg = 'ℹ️ Eklenecek veya güncellenecek kayıt bulunamadı';
+            showToast(msg, newApps.length || updatedCount ? 'success' : 'info');
+
+            // Reset
+            document.getElementById('importResult').style.display = 'none';
+            document.getElementById('importPreview').style.display = 'none';
+            document.getElementById('fileInput').value = '';
+            pendingImportRows = [];
+            renderDashboard();
+            renderCatTabs();
+        }
+
+        // Drag & drop
+        const dz = document.getElementById('dropZone');
+        dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+        dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+        dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+
+        // ─── SETTINGS ────────────────────────────────────────────
+        function saveSettings() {
+            const u = document.getElementById('newUser').value.trim();
+            const p = document.getElementById('newPass').value;
+            if (!u || p.length < 6) { showToast('En az 6 karakterli şifre girin!', 'error'); return; }
+            localStorage.setItem('bs_admin_user', u);
+            localStorage.setItem('bs_admin_pass', p);
+            showToast('Ayarlar kaydedildi ✅', 'success');
+        }
+        function clearAllData() {
+            if (!confirm('TÜM başvurular silinecek! Emin misiniz?')) return;
+            apps = [];
+            saveApps(apps);
+            showToast('Tüm veriler silindi', 'info');
+            renderDashboard();
+        }
+
+        // ─── MÜKERRERLERİ TARA / TEMİZLE ────────────────────────
+        function scanDuplicates() {
+            // E-posta bazında gruplama (büyük/küçük harf duyarsız)
+            const groups = {};
+            apps.forEach(a => {
+                const key = (a.email || '').toLowerCase().trim();
+                if (!key) return;
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(a);
+            });
+            const dupGroups = Object.values(groups).filter(g => g.length > 1);
+            const dupTotal = dupGroups.reduce((s, g) => s + g.length - 1, 0);
+            const info = document.getElementById('dupInfo');
+            const btn = document.getElementById('btnRemoveDups');
+            if (dupTotal === 0) {
+                info.innerHTML = '✅ Mükerrer kayıt yok, her e-posta benzersiz.';
+                info.style.color = '#3fb950';
+                btn.style.display = 'none';
+            } else {
+                info.innerHTML = `⚠️ <b>${dupGroups.length}</b> e-postada <b>${dupTotal}</b> fazladan kayıt bulundu.`;
+                info.style.color = '#f0883e';
+                btn.style.display = 'inline-flex';
+            }
+        }
+        function removeDuplicates() {
+            if (!confirm('Mükerrer kayıtlar silinecek. En eski tarihli kayıt korunur. Devam edilsin mi?')) return;
+            const groups = {};
+            apps.forEach(a => {
+                const key = (a.email || '').toLowerCase().trim();
+                if (!key) { groups['__no_email_' + a.id] = [a]; return; }
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(a);
+            });
+            const cleaned = [];
+            let removed = 0;
+            Object.values(groups).forEach(g => {
+                if (g.length === 1) { cleaned.push(g[0]); return; }
+                // En eski tarihi tut (createdAt küçük = daha eski)
+                g.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+                cleaned.push(g[0]);
+                removed += g.length - 1;
+            });
+            apps = cleaned;
+            saveApps(apps);
+            showToast(`🧹 ${removed} mükerrer kayıt silindi!`, 'success');
+            document.getElementById('dupInfo').innerHTML = `✅ ${removed} kayıt temizlendi. Kalan: ${apps.length} benzersiz kayıt.`;
+            document.getElementById('dupInfo').style.color = '#3fb950';
+            document.getElementById('btnRemoveDups').style.display = 'none';
+            renderDashboard();
+            renderCatTabs();
+        }
+
+        // ─── TAM SİSTEM SIFIRLAMA ────────────────────────────────
+        function fullReset() {
+            if (!confirm('⚠️ TÜM veriler, admin şifresi ve Drive ayarları silinecek!\nSistem fabrika ayarlarına dönecek.\n\nDevam edilsin mi?')) return;
+            if (!confirm('Son kez onaylıyın: Her şey kalıcı olarak silinecek!')) return;
+            localStorage.clear();
+            showToast('Sistem sıfırlandı, giriş sayfasına yönlendiriliyorsunuz...', 'info');
+            setTimeout(() => window.location.href = 'index.html', 1500);
+        }
+
+
+        // ─── GOOGLE SHEETS ENTEGRASYONU ─────────────────────────────
+        const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+        let sheetsToken = null;
+
+        function loadDriveSettings() {
+            const url = localStorage.getItem('bs_script_url') || '';
+            const el = document.getElementById('scriptUrl');
+            if (el) el.value = url;
+            document.getElementById('btnDrive').style.display = url ? 'inline-flex' : 'none';
+        }
+        function saveDriveSettings() {
+            const url = document.getElementById('scriptUrl').value.trim();
+            if (!url.startsWith('https://')) { showToast('Geçerli bir URL girin!', 'error'); return; }
+            localStorage.setItem('bs_script_url', url);
+            loadDriveSettings();
+            showToast('Kaydedildi ✅ Sheets\'e Aktar butonu aktif!', 'success');
+        }
+
+        async function syncToSheets() {
+            if (!apps.length) { showToast('Aktarılacak kayıt yok!', 'error'); return; }
+            const scriptUrl = localStorage.getItem('bs_script_url');
+            if (!scriptUrl) { showToast("Önce Ayarlar'dan Script URL'sini girin!", 'error'); return; }
+
+            const btn = document.getElementById('btnDrive');
+            btn.textContent = '⏳ Aktarılıyor...';
+            btn.disabled = true;
+            try {
+                const rows = [HEADERS, ...apps.map((a, i) => appToRow(a, i))];
+                // Google Apps Script no-cors için JSON gövdesinin gitmesi adına text/plain kullanıyoruz
+                await fetch(scriptUrl, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ sheetName: 'Tüm Kayıtlar', rows: rows })
+                });
+                const now = new Date().toLocaleString('tr-TR');
+                const link = 'https://docs.google.com/spreadsheets/d/1Sjd2CA2vD6GV7zKXOatiipniFxLD2m0L16aQnccau9o/edit';
+                showToast(`📊 Tüm Kayıtlar Sheets'e aktarıldı!`, 'success');
+                const st = document.getElementById('driveStatus');
+                if (st) { st.style.display = 'block'; st.innerHTML = `✅ Son aktarım: <b>${now}</b> — <a href="${link}" target="_blank" style="color:#4f8ef7">Tabloyu aç →</a>`; }
+            } catch (err) {
+                showToast('Hata: ' + err.message, 'error');
+            } finally {
+                btn.textContent = "📊 Sheets'e Aktar";
+                btn.disabled = false;
+            }
+        }
+
+        async function syncCatToSheets() {
+            const cat = activeCat;
+            if (!cat) { showToast('Lütfen önce bir kategori seçin!', 'error'); return; }
+            const catApps = apps.filter(a => a.category === cat);
+            if (!catApps.length) { showToast('Bu kategoride aktarılacak kayıt yok!', 'error'); return; }
+
+            const scriptUrl = localStorage.getItem('bs_script_url');
+            if (!scriptUrl) { showToast("Önce Ayarlar'dan Script URL'sini girin!", 'error'); return; }
+
+            const btn = document.getElementById('btnSyncCat');
+            const origText = btn.textContent;
+            btn.textContent = '⏳ Aktarılıyor...';
+            btn.disabled = true;
+            try {
+                const rows = [HEADERS, ...catApps.map((a, i) => appToRow(a, i))];
+                await fetch(scriptUrl, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ sheetName: cat.substring(0, 90), rows: rows })
+                });
+                showToast(`📊 "${cat}" kategorisi Sheets'e aktarıldı!`, 'success');
+            } catch (err) {
+                showToast('Hata: ' + err.message, 'error');
+            } finally {
+                btn.textContent = origText;
+                btn.disabled = false;
+            }
+        }
+
+
+        // ─── LOGOUT ──────────────────────────────────────────────
+        function doLogout() { sessionStorage.removeItem('bs_auth'); window.location.href = 'index.html'; }
+
+        // ─── HELPERS ─────────────────────────────────────────────
+        function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+        function isoNow() { return new Date().toISOString(); }
+        function todayStr() { return new Date().toISOString().split('T')[0]; }
+        function fmtDate(iso) { if (!iso) return '—'; try { const d = new Date(iso); return d.toLocaleDateString('tr-TR') + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }); } catch { return iso; } }
+        function stCls(s) { if (!s || s === 'Bekliyor') return 'pending'; if (s === 'Onaylandı') return 'approved'; return 'rejected'; }
+        function escQ(s) { return (s || '').replace(/'/g, "\\'"); }
+        function showToast(msg, type = 'info') { const t = document.getElementById('toast'); t.textContent = msg; t.className = `toast show ${type}`; clearTimeout(window._tt); window._tt = setTimeout(() => t.className = 'toast', 3000); }
+
+        // ─── REPORT STATUS & COPY LOGIC ─────────────────────────────
+        function loadParticipantReports() {
+            try { return JSON.parse(localStorage.getItem('bs_participant_reports') || '{}'); } catch(e) { return {}; }
+        }
+        function saveParticipantReports(obj) {
+            localStorage.setItem('bs_participant_reports', JSON.stringify(obj));
+            cloudPush();
+        }
+        function hasReport(id) {
+            return !!loadParticipantReports()[id];
+        }
+        function toggleReport(id) {
+            var reports = loadParticipantReports();
+            if (reports[id]) {
+                delete reports[id];
+            } else {
+                reports[id] = true;
+            }
+            saveParticipantReports(reports);
+            renderAppTable();
+        }
+
+        function copyReport() {
+            var text = '';
+            var now = new Date().toLocaleDateString('tr-TR');
+            
+            if (!activeCat) {
+                var todayStr = new Date().toISOString().split('T')[0];
+                var todayCount = apps.filter(function(a){ return a.createdAt && a.createdAt.startsWith(todayStr); }).length;
+                
+                var out = [];
+                out.push('📊 ARVUS Başvuru Raporu — ' + now);
+                out.push('━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                out.push('');
+                out.push('📌 Toplam Başvuru: ' + apps.length);
+                out.push('📅 Bugünkü Başvuru: ' + todayCount);
+                out.push('');
+                out.push('📂 Kategoriye Göre Dağılım:');
+                out.push('──────────────────────────');
+                for (var i = 0; i < CATEGORIES.length; i++) {
+                    var cat = CATEGORIES[i];
+                    var cnt = apps.filter(function(a){ return a.category === cat; }).length;
+                    out.push('  • ' + cat + ': ' + cnt);
+                }
+                text = out.join('\n');
+            } else {
+                var catApps = apps.filter(function(a){ return a.category === activeCat; });
+                var reports = loadParticipantReports();
+                var uploaded = 0;
+                
+                var out = [];
+                out.push('📊 ARVUS Başvuru Raporu — ' + activeCat);
+                out.push('Tarih: ' + now);
+                out.push('━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                out.push('');
+                out.push('📌 Toplam Başvuru: ' + catApps.length);
+                out.push('');
+                out.push('Takım / Katılımcı Durumları:');
+                out.push('──────────────────────────');
+                for (var i = 0; i < catApps.length; i++) {
+                    var a = catApps[i];
+                    var isUp = reports[a.id];
+                    if (isUp) uploaded++;
+                    var nameStr = (a.team && a.team !== '—' && a.team !== '-') ? a.team + ' (' + a.name + ')' : a.name;
+                    out.push('  ' + (isUp ? '✅' : '⏳') + ' ' + nameStr + ' — ' + (isUp ? 'Yüklendi' : 'Yüklenmedi'));
+                }
+                out.push('');
+                out.push('──────────────────────────');
+                out.push('ÖZET: ' + uploaded + ' takım rapor yükledi, ' + (catApps.length - uploaded) + ' takım rapor yüklemedi.');
+                text = out.join('\n');
+            }
+            
+            navigator.clipboard.writeText(text).then(function() {
+                showToast('📋 Rapor panoya kopyalandı!', 'success');
+            }).catch(function() {
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                showToast('📋 Rapor panoya kopyalandı!', 'success');
+            });
+        }
+
+        // ─── BULUT EŞİTLEME (Firebase) ───────────────────────────
+        // İstersen config'i buraya gömebilirsin; o zaman her cihaz otomatik bağlanır (paneli kullanmadan).
+        const BAKED_CONFIG = {
+            apiKey: "AIzaSyCkUWlEp3dpT7kV9cmg_ag8w2aUrw9NT7k",
+            authDomain: "arvus-robotek.firebaseapp.com",
+            databaseURL: "https://arvus-robotek-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "arvus-robotek",
+            storageBucket: "arvus-robotek.firebasestorage.app",
+            messagingSenderId: "490434147916",
+            appId: "1:490434147916:web:780bde475c30729181a6e9",
+            measurementId: "G-NW0FGDM3M6"
+        };
+        const BAKED_ROOM = 'arvus-2026'; // ortak takım kodu
+
+        const cloud = { config: null, room: null, ref: null, connected: false, applyingRemote: false };
+        function cloudState() { return { apps: apps || [], reports: loadParticipantReports() }; }
+        function cloudPush() {
+            if (cloud.connected && cloud.ref && !cloud.applyingRemote) {
+                cloud.ref.set(cloudState()).catch(() => {});
+            }
+        }
+        function rerenderActive() {
+            const active = document.querySelector('.view.active');
+            const id = active ? active.id : '';
+            if (id === 'view-applications') { renderCatTabs(); renderAppTable(); }
+            else { renderDashboard(); }
+        }
+        function onRemote(snap) {
+            const val = snap.val();
+            if (!val) return;
+            cloud.applyingRemote = true;
+            if (Array.isArray(val.apps)) { apps = val.apps; localStorage.setItem('bs_apps', JSON.stringify(apps)); }
+            if (val.reports && typeof val.reports === 'object') { localStorage.setItem('bs_participant_reports', JSON.stringify(val.reports)); }
+            rerenderActive();
+            cloud.applyingRemote = false;
+        }
+        function updateCloudStatus() {
+            const el = document.getElementById('cloudStatus');
+            if (el) {
+                el.textContent = cloud.connected ? ('● bağlı — oda: ' + cloud.room) : '● bağlı değil';
+                el.style.color = cloud.connected ? 'var(--success)' : 'var(--muted)';
+            }
+        }
+        function connectCloud(configText, room, silent) {
+            try {
+                if (!window.firebase) throw new Error('Firebase yüklenemedi (internet bağlantını kontrol et)');
+                let txt = (configText || '').trim();
+                const i = txt.indexOf('{'), j = txt.lastIndexOf('}');
+                if (i < 0 || j < 0) throw new Error('Geçerli bir config yapıştır');
+                const cfg = (new Function('return (' + txt.slice(i, j + 1) + ')'))();
+                if (!cfg.databaseURL) throw new Error('Config içinde databaseURL yok — Realtime Database oluşturdun mu?');
+                room = (room || 'arvus').replace(/[^a-zA-Z0-9_-]/g, '-');
+                if (!firebase.apps.length) firebase.initializeApp(cfg);
+                const ref = firebase.database().ref('arvus_basvuru/' + room);
+                cloud.config = cfg; cloud.room = room; cloud.ref = ref;
+                localStorage.setItem('bs_cloud', JSON.stringify({ config: cfg, room: room }));
+                ref.once('value').then(snap => {
+                    const val = snap.val();
+                    if (val && Array.isArray(val.apps) && val.apps.length) {
+                        cloud.applyingRemote = true;
+                        apps = val.apps; localStorage.setItem('bs_apps', JSON.stringify(apps));
+                        if (val.reports) localStorage.setItem('bs_participant_reports', JSON.stringify(val.reports));
+                        rerenderActive();
+                        cloud.applyingRemote = false;
+                    } else {
+                        ref.set(cloudState());
+                    }
+                    ref.on('value', onRemote);
+                    cloud.connected = true; updateCloudStatus();
+                    if (!silent) showToast('☁️ Buluta bağlandı — cihazlar artık eşit', 'success');
+                }).catch(e => { updateCloudStatus(); if (!silent) showToast('Bağlantı hatası: ' + e.message, 'error'); });
+            } catch (e) {
+                if (!silent) showToast('Hata: ' + e.message, 'error');
+            }
+        }
+        function cloudConnectFromUI() {
+            connectCloud(document.getElementById('cloudConfig').value, document.getElementById('cloudRoom').value, false);
+        }
+        function cloudDisconnect() {
+            try { if (cloud.ref) cloud.ref.off(); } catch (e) {}
+            cloud.connected = false; cloud.ref = null;
+            localStorage.removeItem('bs_cloud');
+            updateCloudStatus();
+            showToast('Bulut bağlantısı kesildi', 'info');
+        }
+        function cloudAutoConnect() {
+            try {
+                const saved = JSON.parse(localStorage.getItem('bs_cloud') || 'null');
+                if (saved && saved.config) {
+                    const cc = document.getElementById('cloudConfig'); if (cc) cc.value = JSON.stringify(saved.config, null, 2);
+                    const cr = document.getElementById('cloudRoom'); if (cr) cr.value = saved.room || '';
+                    connectCloud(JSON.stringify(saved.config), saved.room, true);
+                    return;
+                }
+                if (BAKED_CONFIG) {
+                    connectCloud(JSON.stringify(BAKED_CONFIG), BAKED_ROOM, true);
+                }
+            } catch (e) {}
+        }
+
+        // ─── INIT ────────────────────────────────────────────────
+        renderDashboard();
+        loadDriveSettings();
+
+        // Örnek veri yükle (ilk açılışta)
+        if (!apps.length) {
+            const sampleData = [
+                { id: uid(), name: 'Azra Selin Türk', email: 'ozelemkarasc7@gmail.com', category: 'Robo Futbol', school: 'Mustafa Kutlu İlkokulu', birth: '03.01.2019', parent: '05392778121', team: 'HAROT', status: 'Bekliyor', createdAt: new Date('2026-04-16T13:39:00').toISOString() },
+                { id: uid(), name: 'Halil', email: 'halilkus9999@gmail.com', category: 'İnsansız Hava Araçları', school: 'Mustafa barut anadolu lisesi', birth: '19.02.2007', parent: 'Feconi', team: 'den', status: 'Bekliyor', createdAt: new Date('2026-04-16T12:58:00').toISOString() },
+                { id: uid(), name: 'Rahman', email: 'rahmanşahin040@hotmail.com', category: 'Çizgi İzleyen Robot', school: 'Bolu Sosyal Bilimler Lisesi', birth: '05.04.2011', parent: '05315341419', team: 'rtons', status: 'Bekliyor', createdAt: new Date('2026-04-15T19:58:00').toISOString() },
+                { id: uid(), name: 'Şükrü Acıyan', email: 'subruaciyan@gmail.com', category: 'Mini Sumo Robot', school: '—', birth: '15.04.2024', parent: 'Rehman', team: '—', status: 'Bekliyor', createdAt: new Date('2026-04-15T22:16:00').toISOString() },
+                { id: uid(), name: 'Melik Halis Ateş', email: 'melikhalisates5@gmail.com', category: 'Robo Futbol', school: 'Borsa İstanbul Mehmet Akif Ersoy Mesleki Teknik Anadolu Lisesi', birth: '14.08.2010', parent: '03869044890', team: 'RoboForce FC', status: 'Bekliyor', createdAt: new Date('2026-04-15T16:50:00').toISOString() },
+                { id: uid(), name: 'Kerem Sanca', email: 'sarcabaris811@gmail.com', category: 'Serbest', school: 'Özel Adem Ceylan Final Mesleki ve Teknik Anadolu Lisesi', birth: '04.12.2009', parent: '05421831976', team: 'Morduk-41', status: 'Onaylandı', createdAt: new Date('2026-04-14T10:00:00').toISOString() },
+            ];
+            apps = sampleData;
+            saveApps(apps);
+            renderDashboard();
+        }
+
+        // Kayıtlı/gömülü bulut ayarı varsa otomatik bağlan
+        cloudAutoConnect();
+    </script>
+</body>
+
+</html>
